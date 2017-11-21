@@ -2,8 +2,7 @@
 	"name": "davenorthcreek/laravel-serializer",
 	"description": "An integration of JMS Serializer with Laravel!",
 	"keywords": [
-		"laravel",
-        "serializer"
+		"laravel", "serializer"
 	],
 	"license": "MIT",
 	"authors": [
