@@ -1,5 +1,5 @@
 {
-	"name": "atrauzzi/laravel-serializer",
+	"name": "davenorthcreek/laravel-serializer",
 	"description": "An integration of JMS Serializer with Laravel!",
 	"keywords": [
 		"laravel",
