@@ -1,5 +1,5 @@
 {
-  "name": "davenorthcreek/laravel-serializer",
+  "name": "psychob/laravel-serializer",
   "description": "An integration of JMS Serializer with Laravel!",
   "keywords": [
     "laravel",
