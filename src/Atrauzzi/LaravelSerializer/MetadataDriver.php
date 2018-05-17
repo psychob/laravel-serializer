@@ -52,11 +52,13 @@ class MetadataDriver implements AdvancedDriverInterface
      */
     public function loadMetadataForClass(ReflectionClass $class)
     {
-
         $className = $class->name;
         $classMetadata = new ClassMetadata($className);
         $mappingConfig = $this->config->get(sprintf('serializer.mappings.%s', $className));
         $prependType = $this->config->get('serializer.prepend_type', false);
+
+        $classMetadata->createdAt = filemtime(config_path('serializer.php'));
+        $classMetadata->fileResources[] = config_path('serializer.php');
 
         // If the class is an instance of Model, as a convenience, pre-configure $visible as defaults.
         if ($class->isSubclassOf('Illuminate\Database\Eloquent\Model')) {
@@ -137,7 +139,6 @@ class MetadataDriver implements AdvancedDriverInterface
      *
      * @param PropertyMetadata $propertyMetadata
      * @param string $type
-     * @throws Exception\UnsupportedType
      */
     protected function setTypeMetadata(PropertyMetadata $propertyMetadata, $type)
     {
