@@ -1,6 +1,6 @@
 <?php
 
-namespace Atrauzzi\LaravelSerializer;
+namespace Atrauzzi\LaravelSerializer\MetaData;
 
 use JMS\Serializer\Metadata\PropertyMetadata;
 use JMS\Serializer\Metadata\StaticPropertyMetadata;
@@ -53,7 +53,7 @@ class MetadataDriver implements AdvancedDriverInterface
     public function loadMetadataForClass(ReflectionClass $class)
     {
         $className = $class->name;
-        $classMetadata = new ClassMetadata($className);
+        $classMetadata = new ClassData($className);
         $mappingConfig = $this->config->get(sprintf('serializer.mappings.%s', $className));
         $prependType = $this->config->get('serializer.prepend_type', false);
 
@@ -61,25 +61,13 @@ class MetadataDriver implements AdvancedDriverInterface
         $classMetadata->fileResources[] = config_path('serializer.php');
 
         // If the class is an instance of Model, as a convenience, pre-configure $visible as defaults.
-        if ($class->isSubclassOf('Illuminate\Database\Eloquent\Model')) {
-
-            $defaultProperties = $class->getDefaultProperties();
-
-            if (!empty($defaultProperties['visible'])) {
-                $mappingConfig['attributes'] = array_merge($defaultProperties['visible'],
-                    $mappingConfig['attributes']);
-            }
-
-        }
+        $mappingConfig = $this->assignPublicModelFields($class, $mappingConfig);
 
         // Generate a Type Meta-Property
+        $this->prependType($class, $prependType, $classMetadata, $className);
 
-        if ($prependType) {
-            $classMetadata->addPropertyMetadata(new StaticPropertyMetadata(
-                $className,
-                '_type',
-                snake_case($class->getShortName())
-            ));
+        if (empty($mappingConfig['attributes'])) {
+            $mappingConfig = $this->fetchBaseTypeFor($class);
         }
 
         if (!empty($mappingConfig['attributes'])) {
@@ -145,4 +133,41 @@ class MetadataDriver implements AdvancedDriverInterface
         $propertyMetadata->setType($type);
     }
 
+    /**
+     * @param ReflectionClass $class
+     * @param $mappingConfig
+     * @return mixed
+     */
+    private function assignPublicModelFields(ReflectionClass $class, $mappingConfig)
+    {
+        if ($class->isSubclassOf('Illuminate\Database\Eloquent\Model')) {
+
+            $defaultProperties = $class->getDefaultProperties();
+
+            if (!empty($defaultProperties['visible'])) {
+                $mappingConfig['attributes'] = array_merge($defaultProperties['visible'],
+                    $mappingConfig['attributes']);
+            }
+
+        }
+
+        return $mappingConfig;
+    }
+
+    /**
+     * @param ReflectionClass $class
+     * @param $prependType
+     * @param $classMetadata
+     * @param $className
+     */
+    private function prependType(ReflectionClass $class, bool $prependType, ClassMetadata $classMetadata, string $className): void
+    {
+        if ($prependType) {
+            $classMetadata->addPropertyMetadata(new StaticPropertyMetadata(
+                $className,
+                '_type',
+                snake_case($class->getShortName())
+            ));
+        }
+    }
 }
