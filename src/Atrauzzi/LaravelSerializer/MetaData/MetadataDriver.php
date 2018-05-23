@@ -61,73 +61,25 @@ class MetadataDriver implements AdvancedDriverInterface
         $mappingConfig = $this->assignPublicModelFields($class, $mappingConfig);
 
         // Generate a Type Meta-Property
-        $this->prependType($class, $prependType, $classMetadata, $className);
+        $this->prependType($class,
+            $this->config->get(sprintf('serializer.mappings.%s.meta_property', $className), null) ?? $prependType,
+            $classMetadata, $className);
 
-        if (empty($mappingConfig['attributes'])) {
-            $mappingConfig = $this->fetchBaseTypeFor($class);
+        // Generate object hierarchy
+        $hierarchy = $this->generateObjectHierarchyFor($class);
+        $properties = [];
+
+        foreach ($hierarchy as $partialClassName) {
+            $rClass = new ReflectionClass($partialClassName);
+
+            $classMetadata->addFileResource($rClass->getFileName());
+
+            $partialDefaultVisibility = $this->getDefaultVisibilityFor($partialClassName);
+            $properties[$partialClassName] = $this->fetchClassAttributes($partialClassName, $partialDefaultVisibility, $rClass);
         }
 
-        if (!empty($mappingConfig['attributes'])) {
-
-            // Only serialize attributes present in the L4 config array.
-            foreach ($mappingConfig['attributes'] as $attribute => $attributeConfig) {
-
-                //
-                // Select a property metadata class.
-
-                // If there's a mutator method, it's virtual.
-                $mutatorMethod = sprintf('get%sAttribute', studly_case($attribute));
-                if ($class->hasMethod($mutatorMethod)) {
-                    $propertyMetadata = new VirtualPropertyMetadata($className, $mutatorMethod);
-                } // If it's a normal attribute or on an instance of Model.
-                elseif ($class->hasProperty($attribute) || $class->isSubclassOf('Illuminate\Database\Eloquent\Model')) {
-                    $propertyMetadata = new PropertyMetadata($className, $attribute);
-                }
-
-
-                if (!empty($propertyMetadata)) {
-
-                    // Additional property config processing.
-
-                    // An array config for the attribute means the attribute has more to set up.
-                    if (is_array($attributeConfig)) {
-                        foreach ($attributeConfig as $config => $value) {
-                            $metadataSetMethod = sprintf('set%sMetadata', studly_case($config));
-                            $this->$metadataSetMethod($propertyMetadata, $value);
-                        }
-                    } // A string config for the attribute means we're just being told to map the type.
-                    elseif (is_string($attributeConfig)) {
-                        $this->setTypeMetadata($propertyMetadata, $attributeConfig);
-                    }
-                    // else - Any other value/null just lives with the defaults.
-
-                    $classMetadata->addPropertyMetadata($propertyMetadata);
-                }
-            }
-        }
-        return $classMetadata;
-    }
-
-    /**
-     * Sets the name that will field will be known as in the serialization output.
-     *
-     * @param PropertyMetadata $propertyMetadata
-     * @param string $name
-     */
-    protected function setSerializedNameMetadata(PropertyMetadata $propertyMetadata, $name)
-    {
-        $propertyMetadata->serializedName = $name;
-    }
-
-    /**
-     * Assigns the data type for a property.
-     *
-     * @param PropertyMetadata $propertyMetadata
-     * @param string $type
-     */
-    protected function setTypeMetadata(PropertyMetadata $propertyMetadata, $type)
-    {
-        $propertyMetadata->setType($type);
+        $calculatedProperties = $this->calculateCorrectProperties($properties);
+        return $this->renderProperties($calculatedProperties, $class, $classMetadata);
     }
 
     /**
@@ -157,8 +109,12 @@ class MetadataDriver implements AdvancedDriverInterface
      * @param $classMetadata
      * @param $className
      */
-    private function prependType(ReflectionClass $class, bool $prependType, ClassMetadata $classMetadata, string $className): void
-    {
+    private function prependType(
+        ReflectionClass $class,
+        bool $prependType,
+        ClassMetadata $classMetadata,
+        string $className
+    ): void {
         if ($prependType) {
             $classMetadata->addPropertyMetadata(new StaticPropertyMetadata(
                 $className,
@@ -166,5 +122,155 @@ class MetadataDriver implements AdvancedDriverInterface
                 snake_case($class->getShortName())
             ));
         }
+    }
+
+    /**
+     * Generate Object Hierarchy for $class
+     *
+     * @param ReflectionClass $class
+     *
+     * @return array
+     */
+    private function generateObjectHierarchyFor(ReflectionClass $class, bool $unique = true): array
+    {
+        $ret = [$class->getName()];
+
+        $ret = array_merge($ret, $class->getInterfaceNames());
+
+        if ($class->getParentClass()) {
+            $ret = array_merge($ret, $this->generateObjectHierarchyFor($class->getParentClass(), false));
+        }
+
+        if ($unique) {
+            $ret = array_unique($ret);
+        }
+
+        return $ret;
+    }
+
+    private function getDefaultVisibilityFor(string $className): array
+    {
+        $value = $this->config->get(sprintf('serializer.mappings.%s.meta_property', $className), []);
+
+        if (is_string($value)) {
+            $value = [$value];
+        }
+
+        return $value;
+    }
+
+    private function fetchClassAttributes(string $className, array $visibility, ReflectionClass $rClass): array
+    {
+        $properties = $this->fetchClassDefinedAttributes($className, $rClass);
+        $properties = array_merge($properties, $this->fetchClassVisibilityAttributes($className, $rClass, $properties, $visibility));
+
+        return $properties;
+    }
+
+    private function fetchClassDefinedAttributes(string $className, ReflectionClass $class): array
+    {
+        $defined = $this->config->get(sprintf('serializer.mappings.%s.attributes', $className), null);
+
+        if ($defined === null) {
+            return [];
+        }
+
+        $ret = [];
+
+        foreach ($defined as $key => $value) {
+            $line = [
+                'type' => null,
+                'name' => null,
+                'internal_name' => null,
+                'groups' => [],
+                'accessor' => null,
+                'attribute' => true,
+            ];
+
+            if (is_array($value)) {
+                $line['name'] = $line['internal_name'] = $key;
+
+                if (!empty($value['name'])) {
+                    $line['name'] = $value['name'];
+                }
+
+                if (!empty($value['groups'])) {
+                    $line['groups'] = $value['groups'];
+                }
+
+                if (!empty($value['type'])) {
+                    $line['type'] = $value['type'];
+                }
+            } elseif (is_string($key) && is_string($value)) {
+                $line['internal_name'] = $line['name'] = $key;
+                $line['type'] = $value;
+            } else {
+                $line['internal_name'] = $line['name'] = $value;
+            }
+
+            if ($class->hasProperty($line['internal_name'])) {
+                $prop = $class->getProperty($line['internal_name']);
+
+                if (!$prop->isPublic()) {
+                    $line['accessor'] = 'get'.studly_case($line['internal_name']);
+                }
+            } else {
+                $line['accessor'] = 'get'.studly_case($line['internal_name']);
+            }
+
+            $ret[] = $line;
+        }
+
+        return $ret;
+    }
+
+    private function fetchClassVisibilityAttributes(string $className, ReflectionClass $class, array $properties, array $visibility): array
+    {
+        // TODO: fetch properties based on visibility
+        return [];
+    }
+
+    private function calculateCorrectProperties(array $properties): array
+    {
+        $ret = [];
+
+        foreach ($properties as $class => $props) {
+            foreach ($props as $property) {
+                if (!empty($ret[$property['internal_name']])) {
+                    if (!$ret[$property['internal_name']]['attribute']) {
+                        $ret[$property['internal_name']] = $property;
+                    }
+                } else {
+                    $ret[$property['internal_name']] = $property;
+                }
+            }
+        }
+
+        return $ret;
+    }
+
+    private function renderProperties(array $properties, ReflectionClass $class, ClassData $metadata): ClassData
+    {
+        foreach ($properties as $property) {
+            if ($property['accessor']) {
+                $prop = new VirtualPropertyMetadata($class->getName(), $property['accessor']);
+                $prop->serializedName = $property['name'];
+                $prop->groups = $property['groups'];
+                if ($property['type']) {
+                    $prop->setType($property['type']);
+                }
+            } else {
+                $prop = new PropertyMetadata($class->getName(), $property['accessor']);
+                $prop->serializedName = $property['name'];
+                $prop->groups = $property['groups'];
+                if ($property['type']) {
+                    $prop->setType($property['type']);
+                }
+            }
+
+            $metadata->addPropertyMetadata($prop);
+        }
+
+        return $metadata;
     }
 }

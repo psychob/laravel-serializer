@@ -31,7 +31,7 @@ class ClassData extends ClassMetadata
             return true;
         }
 
-        return version_compare($this->version, JMSSerializerServiceProvider::VERSION, '<=');
+        return version_compare($this->version, JMSSerializerServiceProvider::VERSION, '==');
     }
 
     public function serialize()
@@ -47,5 +47,10 @@ class ClassData extends ClassMetadata
         list($this->version, $parent) = unserialize($str);
 
         parent::unserialize($parent);
+    }
+
+    public function addFileResource(string $fileName): void
+    {
+        $this->fileResources[] = $fileName;
     }
 }
