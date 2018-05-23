@@ -63,8 +63,6 @@ All configuration is stored in `config/serializer.php`.
 
 ### Credits
 
-This library is maintained by [Andrzej Budzanowski](1), based on [atrauzzi/laravel-serializer](2) by [Alexander Trauzzi](3)
-
-[1]: https://andrzej.budzanowski.pl/
-[2]: https://github.com/atrauzzi/laravel-serializer
-[3]: http://goo.gl/Bq49Bg
+This library is maintained by [Andrzej Budzanowski](https://andrzej.budzanowski.pl/),
+based on [atrauzzi/laravel-serializer](https://github.com/atrauzzi/laravel-serializer)
+by [Alexander Trauzzi](http://goo.gl/Bq49Bg)
