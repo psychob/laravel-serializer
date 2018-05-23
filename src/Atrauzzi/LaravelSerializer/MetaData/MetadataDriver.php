@@ -57,9 +57,6 @@ class MetadataDriver implements AdvancedDriverInterface
         $mappingConfig = $this->config->get(sprintf('serializer.mappings.%s', $className));
         $prependType = $this->config->get('serializer.prepend_type', false);
 
-        $classMetadata->createdAt = filemtime(config_path('serializer.php'));
-        $classMetadata->fileResources[] = config_path('serializer.php');
-
         // If the class is an instance of Model, as a convenience, pre-configure $visible as defaults.
         $mappingConfig = $this->assignPublicModelFields($class, $mappingConfig);
 
