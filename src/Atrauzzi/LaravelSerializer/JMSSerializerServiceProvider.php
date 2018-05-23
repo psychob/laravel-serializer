@@ -13,7 +13,7 @@ use Doctrine\Common\Annotations\Reader;
 
 class JMSSerializerServiceProvider extends Base
 {
-    const VERSION = '1.3';
+    const VERSION = '1.3.1';
 
     public function register()
     {

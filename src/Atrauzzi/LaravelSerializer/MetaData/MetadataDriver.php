@@ -188,7 +188,8 @@ class MetadataDriver implements AdvancedDriverInterface
             ];
 
             if (is_array($value)) {
-                $line['name'] = $line['internal_name'] = $key;
+                $line['name'] = snake_case($key);
+                $line['internal_name'] = $key;
 
                 if (!empty($value['name'])) {
                     $line['name'] = $value['name'];
@@ -202,10 +203,12 @@ class MetadataDriver implements AdvancedDriverInterface
                     $line['type'] = $value['type'];
                 }
             } elseif (is_string($key) && is_string($value)) {
-                $line['internal_name'] = $line['name'] = $key;
+                $line['name'] = snake_case($key);
+                $line['internal_name'] = $key;
                 $line['type'] = $value;
             } else {
-                $line['internal_name'] = $line['name'] = $value;
+                $line['internal_name'] = $value;
+                $line['name'] = snake_case($value);
             }
 
             if ($class->hasProperty($line['internal_name'])) {
